@@ -28,6 +28,42 @@ import java.util.List;
 				"WHERE USER_ID = ? " + 
 				"ORDER BY DATE_LIKED";
 		
+		// Query pulls back how many likes on a user's posts or comments
+		private final String GET_POST_COMMENTS_TOTAL_BY_USER_QUERY = "SELECT MAX(POST_LIKE_CNT) AS POST_LIKE_CNT, " +
+														"MAX(COMMENT_LIKE_COUNT) AS COMMENT_LIKE_COUNT, " +
+														"U.USERNAME " +
+														"FROM " +
+														"( " +
+														"SELECT COUNT(*) AS POST_LIKE_CNT, " +
+														"0 AS COMMENT_LIKE_COUNT, " +
+														"? AS USER_ID " +
+														"FROM POST_LIKES " +
+														"WHERE USER_ID = ? " +
+														"UNION " + 
+														"SELECT 0 AS POST_LIKE_CNT, " + 
+														"COUNT(*) AS COMMENT_LIKE_COUNT, " + 
+														"? AS USER_ID " + 
+														"FROM COMMENT_LIKES " + 
+														"WHERE USER_ID = ? " + 
+														") AS TOTAL_LIKES " + 
+														"INNER JOIN USERS AS U " + 
+														"	ON U.ID = TOTAL_LIKES.USER_ID ";
+		
+		// Like a post or comment
+		private final String CREATE_POST_LIKE_QUERY = "INSERT INTO POST_LIKES (USER_ID, POST_ID, DATE_LIKED) VALUES (?, ?, NOW())";
+		private final String CREATE_COMMENT_LIKE_QUERY = "INSERT INTO COMMENT_LIKES (USER_ID, COMMENT_ID, DATE_LIKED) VALUES (?, ?, NOW())";
+		private final String QUERY_CHECK_POST = "SELECT COUNT(*) AS CNT FROM POSTS WHERE ID = ?";
+		private final String QUERY_CHECK_COMMENT = "SELECT COUNT(*) AS CNT FROM COMMENTS WHERE ID = ?";
+		private final String QUERY_CHECK_USER = "SELECT COUNT(*) AS CNT FROM USERS WHERE ID = ?";
+		
+		// Remove a like from a post or comment
+		private final String DELEATE_POST_LIKE_QUERY = "DELETE FROM POST_LIKES WHERE ID = ?";
+		private final String DELETE_COMMENT_LIKE_QUERY = "DELETE FROM COMMENT_LIKES WHERE ID = ?";
+		
+		// Update the date the post or comment was liked by id
+		private final String UPDATE_COMMENT_LIKE_QUERY = "UPDATE COMMENT_LIKES SET DATE_LIKED = STR_TO_DATE (?, '%Y-%m-%d %H:%i') WHERE ID = ?";
+		private final String UPDATE_POST_LIKE_QUERY = "UPDATE POST_LIKES SET DATE_LIKED = STR_TO_DATE (?, '%Y-%m-%d %H:%i') WHERE ID = ?";
+		
 		//Query pulls all likes for one post by postId
 		private final String GET_LIKES_BY_POSTID_QUERY = "SELECT * FROM POST_LIKES WHERE POST_ID =?"; 
 		
@@ -63,6 +99,26 @@ import java.util.List;
 		
 		
 		// methods	
+		
+		// Method queries database by comments, posts, and users
+		public Likes getNumberOfPostsCommentLikesByUser(int userId) throws SQLException {
+			PreparedStatement ps = connection.prepareStatement(GET_POST_COMMENTS_TOTAL_BY_USER_QUERY);
+			
+			// The same parameter value four times over
+			for (int i = 1; i <= 4; i++)
+				ps.setInt(i, userId);
+			
+			ResultSet rs = ps.executeQuery();
+			Likes userLikeCnt = null;
+			
+			// Loop through all rows and store in Comments list 
+			while (rs.next()) {
+				userLikeCnt = new Likes(rs.getString(3), rs.getInt(1), rs.getInt(2));
+			}
+			
+			// Return comments, posts, usernames list
+			return userLikeCnt;
+		}	
 		
 		public Likes getPostLikesByPostLikeId (int id) throws SQLException {
 			PreparedStatement ps = connection.prepareStatement(GET_POST_LIKE_BY_POSTLIKESID_QUERY); 
@@ -135,7 +191,28 @@ import java.util.List;
 			ps.setString(4, date_liked);			
 			ps.executeQuery();
 			}//end createNewCommentLike
-	
+		
+		
+		// Methods creates a new comment in the database
+		public void like (int userId, int id, String type) throws SQLException {	
+			
+			// Check variable to prevent program erroring out when parent does not exist
+			int checkPostComment = 0, checkUser = 0;
+			ResultSet rs, rs2;
+			
+			// Statement to prevent program erroring out when parent comment does not exist
+			if (type.equals("comment")) {
+				PreparedStatement ps = connection.prepareStatement(QUERY_CHECK_COMMENT);
+				ps.setInt(1, id);
+				rs = ps.executeQuery();
+			}
+			else {
+				// Statement to prevent program erroring out when parent post does not exist
+				PreparedStatement ps = connection.prepareStatement(QUERY_CHECK_POST);
+				ps.setInt(1, id);
+				rs = ps.executeQuery();
+			}
+		}
 		
 		// Method deletes a single like for a post by id
 		public void deletePostLikeById(int id) throws SQLException {
@@ -152,6 +229,44 @@ import java.util.List;
 			ps.setInt(1, id);
 			ps.executeUpdate();
 				}// end deleteCommentLikeById
+		
+		
+		// Method to unlike a comment or post
+		public void unlike (int likeId, String type) throws SQLException {
+			// Prepared statement for deletes comments and likes tables dependency
+			PreparedStatement ps = null;
+			if (type.equals("comment")) {
+				ps = connection.prepareStatement(DELETE_COMMENT_LIKE_QUERY);
+			}
+			else
+				ps = connection.prepareStatement(DELEATE_POST_LIKE_QUERY);
 			
+			// Set parameter and execute query
+			ps.setInt(1, likeId);
+			ps.executeUpdate();
+		}
+		
+		// Method updates post or comment liked date
+		public void updateLikeDate(int id, String date, String type) throws SQLException
+		{
+			PreparedStatement ps = null;
+			
+			// If comment update comment liked date
+			if (type.equals("comment")) {
+				ps = connection.prepareStatement(UPDATE_COMMENT_LIKE_QUERY);
+				ps.setString(1, date);
+				ps.setInt(2, id);
+				ps.executeUpdate();
+			}
+			// If post update post liked date
+			else {
+				// Statement to prevent program erroring out when parent post does not exist
+				ps = connection.prepareStatement(UPDATE_POST_LIKE_QUERY);
+				ps.setString(1, date);
+				ps.setInt(2, id);
+				ps.executeUpdate();
+			}
+		}
+		
 	}//end PostsDao
 
