@@ -54,8 +54,8 @@ public class Posts {
 		return posterUsername;	
 	}//end getPosterUsername
 	
-	public void setPosterUsername(String postUsername) {
-		this.posterUsername = postUsername;
+	public void setPosterUsername(String posterUsername) {
+		this.posterUsername = posterUsername;
 	}//end setPosterUserName
 	
 	public String getPostText() {
